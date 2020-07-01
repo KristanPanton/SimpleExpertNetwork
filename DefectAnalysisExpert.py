@@ -19,41 +19,54 @@ DEFECTS = {
     'Bridging':
         {
             'Causes': {
-                'PCB': [
-                    ('', 'Infrequent solder mask change'),
-                    ('', 'Insufficient PCB support'),
-                    ('', 'Poor gasketing between stencil and PCB')
-                ],
-                'Stencil': [
-                    ('Is the stencil tension tight?', 'Insufficient stencil tension'),
-                    ('Is the stencil undamaged?', 'Damaged stencil'),
-                    ('Has the stencil been cleaned prior?', 'Unclean stencil'),
-                    ('Are the stencil apertures smaller than the pads?', 'Stencil aperture design'),
-                    'Poor gasketing between stencil and PCB'
-                ],
-                'Gasket': [
-                    ('Is there a good seal between the stencil and the PCB?',
-                     'Poor gasketing between stencil and PCB')
-                ],
-                'Screen Printer': [
-                    'Screen printer misalignment',
-                    'Bad separation speed',
-                    ('Are the squeegee blades undamaged?', 'Damaged squeegee blades'),
-                    'Bad/Inaccurate component placement'
-                ],
-                'Squeegee Blades': ['', 'Bad/Inaccurate component placement'],
-                'Reflow Profile': [('', 'Incorrect reflow profile')],
-                'Solder Paste': [
-                    ('', 'Poor solder paste condition'),
-                    ('', 'Dry solder paste')
-                ]
+                'PCB': {
+                    'Solder mask present between adjacent pads': ['Are there solder masks between adjacent pads?'],
+                    'Insufficient PCB support': ['Is the PCB not supported properly?'],
+                },
+                'Stencil': {
+                    'Insufficient stencil tension': ['Is the stencil tension insufficient?'],
+                    'Damaged stencil': ['Is the stencil damaged?'],
+                    'Unclean stencil': [
+                        'Is the minimum print pressure too low?',
+                        'Is the stencil wiped infrequently?'
+                    ],
+                    'Inappropriate stencil aperture design': ['Are the stencil apertures smaller than the pads?'],
+                },
+                'Gasket': {
+                    'Poor gasketing between stencil and PCB': [
+                        'Is there a zero print gap between the stencil and PCB?',
+                        'Is there an inconsistent paste smear underneath the stencil?'
+                    ]
+                },
+                'Screen Printer': {
+                    'Screen printer misalignment': ['Is the print inaccurate and inconsistent?'],
+                    'Bad separation speed': ["Are there 'dog ears' on the components?"],
+                    'Bad/Inaccurate component placement': []
+                },
+                'Squeegee Blades': {
+                    'Damaged squeegee blades': ['Are the squeegee blades damaged?'],
+                },
+                'Component Placement': {
+                    'Component placement inaccuracy': ['Are the component placements accurate?'],
+                    'Excessive component placement pressure': [
+                        'Has solder paste overflowed from the pad?',
+                        'Is component placement height greater than ±1/3 of paste height?'
+                    ]
+                },
+                'Reflow Profile': {
+                    'Incorrect reflow profile': ["Was the reflow profile's soak extended?"]
+                },
+                'Solder Paste': {
+                    'Wrong solder paste operating temperature': [
+                        "Is there a mismatch between the solder paste's required temperature and the screen printer's temperature?"
+                    ],
+                    'Dry solder paste': [
+                        'Has the solder paste expired?',
+                        'Has old solder paste contaminated the new solder paste?'
+                    ]
+                }
             }
-        },
-    'Tombstoning': {
-        'Causes': [
-            ('', 'Component body not covering > 50% of both pads')
-        ]
-    }
+        }
 }
 
 
