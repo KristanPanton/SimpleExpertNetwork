@@ -2,8 +2,10 @@ from pprint import PrettyPrinter
 from tkinter import *
 from tkinter.ttk import *
 
+from PIL import ImageTk, Image
 from experta import *
 from experta.utils import unfreeze
+from graphviz import Digraph
 from ttkthemes import ThemedTk
 
 # ------------------------------------------------------------------------------ #
@@ -84,19 +86,20 @@ def MAYBE(*patterns):
 
 class Defect(Fact):
     _0 = Field(str, mandatory=True)
-    possible_causes = Field(list, default=[])
+    # possible_causes = Field(list, default=[])
 
 
 class Issue(Fact):
     recommendations = Field(list, default=[])
-    possible_cause = Field(str)
-    related_components = Field(list, default=[])
+    why = Field(list, default=[])
+    end = Field(bool, default=True)
+    # related_components = Field(list, default=[])
 
 
-class Action(Fact):
-    # Action type Eg. Investigate
-    _0 = Field(str, mandatory=True)
-    done = Field(bool, default=False)
+# class Action(Fact):
+#     # Action type Eg. Investigate
+#     _0 = Field(str, mandatory=True)
+#     done = Field(bool, default=False)
 
 
 class Component(Fact):
@@ -105,7 +108,6 @@ class Component(Fact):
 
 class PCB(Component):
     solder_mask_removed_between_adjacent_pads = Field(bool, default=True)
-    # coplanarity_present = Field(bool, default=False)
 
 
 class Stencil(Component):
@@ -160,251 +162,235 @@ COMPONENT_BINDINGS = {
 
 
 class DefectAnalysisEngine(KnowledgeEngine):
-    # @DefFacts()
-    # def initiate_analysis(self):
-    #     print("This is an expert system for defect analysis.")
-    #     print('Answer the following questions.')
-    #
-    #     print("What type of defect occurred?")
-    #     [print(f"{i}. {defect}") for i, defect in enumerate(DEFECTS_LIST, 1)]
-    #     while True:
-    #         try:
-    #             defect = DEFECTS_LIST[abs(int(input("Enter number: ")) - 1)]
-    #             print(f"\nYour choice is {defect}")
-    #             # yield Action('Investigate')
-    #             yield Action('Investigate', Defect(defect))
-    #             break
-    #         except (ValueError, IndexError):
-    #             print("Invalid Input!")
+    def __init__(self):
+        super().__init__()
+        self.dot = Digraph(comment='Defect Analysis Tree', node_attr={'color': 'lightblue2', 'style': 'filled', 'shape': 'box'})
+        self.dot.format = 'png'
+        self.dot.filename = 'graph-output/defect-analysis-tree.gv'
+        self.defect = ''
+        self.issues = []
 
-    # ~~~~~~~~~~< Bridging Rules >~~~~~~~~~~
-    # @Rule(Action('Investigate', Defect('Bridging')))
-    # def investigate_bridging(self):
-    #     print("Investigating 'Bridging' defect...")
-    #     self.declare(PCB(solder_mask_removed_between_adjacent_pads=get_yorn(
-    #         'Have the solder mask between adjacent pads been removed?')))
-    #     self.declare(
-    #         Stencil(clean=get_yorn('Is the stencil clean?'), tension_tight=get_yorn('Is the stencil tension tight?'),
-    #                 aperture_smaller_than_landing_pad=get_yorn('Is the stencil aperture smaller than the landing pad?'),
-    #                 minimum_print_pressure_good=get_yorn('Is the minimum print pressure sufficient?'),
-    #                 dry_after_clean=get_yorn('Was the stencil dry after cleaning?'),
-    #                 dry_before_next_print=get_yorn('Was the stencil dry before the next print?'),
-    #                 wiped_frequently=get_yorn('Is the stencil wiped frequently?')
-    #                 ))
-    #
-    #     self.declare(ScreenPrinter(zero_print_gap_present=get_yorn('Is there a zero print gap?'),
-    #                                print_accurate=get_yorn('Are the prints accurate?'),
-    #                                print_consistent=get_yorn('Are the prints consistent?'),
-    #                                pcb_support_good=get_yorn('Are the PCBs sufficiently supported?'),
-    #                                separation_speed_good=not get_yorn("Are there any 'dog ears' on the board?"),
-    #                                squeegee_blade_condition_good=not get_yorn('Are the squeegee blades damaged?'),
-    #                                operating_temperature_good=get_yorn('Are the operating temperatures verified?'),
-    #                                operating_humidity_good=get_yorn('Is the operating humidity verified?')
-    #                                ))
-    #
-    #     self.declare(SolderPaste(expired=get_yorn('Has the solder paste expired?'),
-    #                              passed_hot_slump_test=get_yorn(
-    #                                  'Has the solder paste passed the cold and hot slump test?')))
-    #
-    #     self.declare(
-    #         ReflowOven(reflow_profile_soak_extended=get_yorn('Is there an extended soak in the reflow profile?')))
-    #
-    #     # comp_placement_pressure_bool = get_yorn(
-    #     #     'Is there any solder paste squeezed out of the pads?')
-    #
-    #     # while True:
-    #     #     try:
-    #     #         self.declare(PickAndPlaceMachine(
-    #     #             component_placement_pressure_good=comp_placement_pressure_bool,
-    #     #             components_placement_height=float(input('Component placement height: ')),
-    #     #             solder_paste_height=float(input('Solder paste height: '))))
-    #     #         break
-    #     #     except (ValueError, OverflowError):
-    #     #         print('Invalid Input!')
-    #     self.declare(PickAndPlaceMachine(component_placemheightent_pressure_good=get_yorn(
-    #         'Is there any solder paste squeezed out of the pads?')))
+    # def declare(self, f):
+    #     self.issues.append(f)
+    #     self.declare(f)
 
-    # AS.i1 << Issue('Component damaged before placement')
+    def find_issue(self, s):
+        for i, issue in self.facts.items():
+            if isinstance(issue, Issue) and s == issue[0]:
+                print('Issue:', issue[0])
+                return issue
+        return None
+
+    @Rule(Defect(MATCH.name))
+    def set_defect(self, name):
+        self.defect = name
+
+    def create_graph(self):
+        # print(self.issues)
+        for i, issue in self.facts.items():
+            if isinstance(issue, Issue):
+                self.dot.node(issue[0])
+                for why in issue['why']:
+                    self.dot.node(why)
+                    self.dot.edge(why, issue[0])
+                # self.dot.edge(issue[0], self.defect)
+
     @Rule(PCB(solder_mask_removed_between_adjacent_pads=False))
     def declare_coplanarity(self):
-        # if i1:
-        # reccs.append('Set up coplanarity check on Pick-and-Place machine')
-        self.declare(Issue('Coplanarity', recommendations=['Remove solder mask between adjacent pads']))
+        self.declare(Issue('Coplanarity', recommendations=['Remove solder mask between adjacent pads'],
+                           why=['Solder mask between adjacent pads not removed']))
 
     @Rule(Stencil(tension_tight=False))
     def declare_poor_stencil_tension(self):
-        self.declare(Issue('Poor stencil tension', recommendations=['Ensure there is sufficient stencil tension']))
+        self.declare(
+            Issue('Poor stencil tension', recommendations=['Ensure there is sufficient stencil tension'],
+                  why=['Stencil tension loose']))
 
     @Rule(Stencil(aperture_smaller_than_landing_pad=False))
     def declare_faulty_aperture_design(self):
         self.declare(Issue('Faulty stencil aperture design',
-                           recommendations=['Ensure that the stencil aperture is smaller than the landing pad']))
+                           recommendations=[
+                               'Ensure that the stencil aperture is smaller than the landing pad'],
+                           why=['Aperture not slightly smaller than landing pad']))
 
     @Rule(ScreenPrinter(zero_print_gap_present=False))
     def declare_zero_print_gap_absent(self):
-        self.declare(Issue('Zero print gap absent', recommendations=['Ensure that there is a zero print gap']))
+        self.declare(
+            Issue('Zero print gap absent', recommendations=['Ensure that there is a zero print gap'], why=[]))
 
-    @Rule(
-        AND(
-            MAYBE(
-                Issue('Coplanarity', recommendations=MATCH.reccs1),
-                Issue('Poor stencil tension', recommendations=MATCH.reccs2),
-                Issue('Faulty stencil aperture design', recommendations=MATCH.reccs3),
-                Issue('Zero print gap absent', recommendations=MATCH.reccs4)
-            ),
-            OR(
-                Issue('Coplanarity', recommendations=W()),
-                Issue('Poor stencil tension', recommendations=W()),
-                Issue('Faulty stencil aperture design', recommendations=W()),
-                Issue('Zero print gap absent', recommendations=W())
-            )
-        )
-    )
-    def declare_poor_stencil_to_pcb_gasketing(self, reccs1=[], reccs2=[], reccs3=[], reccs4=[]):
-        list_reccs = [reccs1, reccs2, reccs3, reccs4]
-        list_reccs = [unfreeze(r) for r in list_reccs]
-        print('Poor stencil to PCB gasketing rule: ', list_reccs)
-        # Flattens list of recommendations
-        reccs = [recc
-                 for sublist in list_reccs
-                 for recc in sublist]
-        print('Poor stencil to PCB gasketing rule: ', reccs)
-        # related_components = []
+    @Rule(OR(
+        AS.iss_param1 << Issue('Coplanarity'),
+        AS.iss_param2 << Issue('Poor stencil tension'),
+        AS.iss_param3 << Issue('Faulty stencil aperture design'),
+        AS.iss_param4 << Issue('Zero print gap absent')
+    ))
+    def declare_poor_stencil_to_pcb_gasketing(self, iss_param1=None, iss_param2=None, iss_param3=None, iss_param4=None):
+        current_param = unfreeze([i for i in [iss_param1, iss_param2, iss_param3, iss_param4] if i][0])
+        current_recs = unfreeze(current_param['recommendations'])
+        if tbmodified := self.find_issue('Poor stencil to PCB gasketing'):
+            tbmodified_whys = unfreeze(tbmodified['why'])
+            tbmodified_whys.append(current_param[0])
+            recs = unfreeze(tbmodified['recommendations'])
+            for rec in current_recs:
+                if rec not in tbmodified['recommendations']:
+                    recs.append(rec)
+            self.modify(tbmodified, recommendations=recs, why=tbmodified_whys)
 
-        self.declare(Issue('Poor stencil to PCB gasketing', recommendations=reccs))
+        else:
+            self.declare(
+                Issue('Poor stencil to PCB gasketing', recommendations=current_recs, why=current_param['why']))
 
-    @Rule(Stencil(aperture_smaller_than_landing_pad=False))
-    def declare_poor_aperture_design(self):
-        self.declare(Issue('Stencil aperture design',
-                           recommendations=['Ensure that the stencil aperture is smaller than the landing pad']))
+    @Rule(OR(
+        AS.sten_param1 << Stencil(minimum_print_pressure_good=False),
+        AS.sten_param2 << Stencil(clean=False),
+        AS.sten_param3 << Stencil(wiped_frequently=False)
+    ))
+    def declare_unclean_stencil(self, sten_param1=None, sten_param2=None, sten_param3=None):
+        recs = []
+        whys = []
 
-    # If stencil has any of these attributes and issues does or doesn't exist declare or modify unclean stencil
-    @Rule(
-        AND(
-            MAYBE(
-                AS.sp1 << ScreenPrinter(zero_print_gap_present=False),
-                AS.s2 << Stencil(minimum_print_pressure_good=False),
-                AS.s3 << Stencil(clean=False),
-                AS.s4 << Stencil(wiped_frequently=False)
-            ),
-            OR(
-                ScreenPrinter(zero_print_gap_present=False),
-                Stencil(minimum_print_pressure_good=False),
-                Stencil(clean=False),
-                Stencil(wiped_frequently=False)
-            )
-        )
-    )
-    def declare_unclean_stencil(self, sp=None, s1=None, s2=None, s3=None):
-        reccs = []
-        if sp:
-            reccs.append('Ensure zero print gap')
-        if s1:
-            reccs.append('Ensure minimum print pressure')
-        if s2:
-            reccs.append('Clean stencil')
-        if s3:
-            reccs.append('Increase wipe frequency')
+        if sten_param1:
+            whys.append('Minimum print pressure insufficient')
+            recs.append('Verify minimum print pressure')
 
-        self.declare(Issue('Unclean stencil', recommendations=reccs))
+        elif sten_param2:
+            whys.append('Unclean stencil')
+            recs.append('Clean stencil')
+
+        else:
+            whys.append('Wipe frequency too low')
+            recs.append('Increase wipe frequency')
+
+        if tbmodified := self.find_issue('Dry solder paste'):
+            ci_recs = unfreeze(tbmodified['recommendations'])
+            ci_whys = unfreeze(tbmodified['why'])
+
+            if not any(why in ci_whys for why in whys):
+                ci_whys.extend(whys)
+                ci_recs.extend(recs)
+
+                self.modify(tbmodified, recommendations=ci_recs, why=ci_whys)
+
+        else:
+            self.declare(Issue('Unclean stencil', recommendations=recs, why=whys))
 
     @Rule(NOT(ScreenPrinter(print_accurate=True, print_consistent=True)))
     def declare_misaligned_print(self):
         self.declare(Issue('Screen printer misalignment',
-                           recommendations=['Ensure print accuracy and consistency for both print and strokes']))
+                           recommendations=[
+                               'Ensure print accuracy and consistency for both print and strokes'],
+                           why=['Print is not accurate or consistent']))
 
     @Rule(NOT(Stencil(dry_after_clean=True, dry_before_next_print=True)))
     def declare_smearing(self):
         self.declare(Issue('Smearing during printing process',
-                           recommendations=['Ensure stencil is dry after cleaning and before next print']))
+                           recommendations=['Ensure stencil is dry after cleaning and before next print'],
+                           why=['Stencil is was not dry after cleaning or before next print']))
 
     @Rule(ScreenPrinter(separation_speed_good=False))
     def declare_peaking(self):
-        self.declare(Issue('Peaking', recommendations=['Adjust separation speed']))
+        self.declare(
+            Issue('Peaking', recommendations=['Adjust separation speed'], why=['Incorrect separation speed']))
 
     @Rule(ScreenPrinter(squeegee_blade_condition_good=False))
     def declare_uneven_print_pressure(self):
-        self.declare(Issue('Uneven print pressure', recommendations=['Replace squeegee blade']))
+        self.declare(
+            Issue('Uneven print pressure', recommendations=['Replace squeegee blade'], why=['Squeegee blade damaged']))
 
-    @Rule(
-        AND(
-            MAYBE(
-                Issue('Peaking', recommendations=MATCH.reccs1),
-                Issue('Uneven print pressure', recommendations=MATCH.reccs2),
-                AS.sp << ScreenPrinter(pcb_support_good=False)
-            ),
-            OR(
-                Issue('Peaking', recommendations=W()),
-                Issue('Uneven print pressure', recommendations=W()),
-                ScreenPrinter(pcb_support_good=False)
-            )
-        )
-    )
-    def declare_poor_print_definition(self, reccs1=None, reccs2=None, sp=None):
-        reccs = []
-        if reccs1:
-            reccs.extend(reccs1)
-        if reccs2:
-            reccs.extend(reccs2)
-        if sp:
-            reccs.append('Ensure sufficient PCB support')
+    @Rule(OR(
+        AS.iss_param1 << Issue('Peaking'),
+        AS.iss_param2 << Issue('Uneven print pressure'),
+        AS.sp_param << ScreenPrinter(pcb_support_good=False)
+    ))
+    def declare_poor_print_definition(self, iss_param1=None, iss_param2=None, sp_param=None):
+        recs = []
+        whys = []
 
-        self.declare(Issue('Poor print definition', recommendations=reccs))
+        if iss_param1:
+            whys.append(iss_param1[0])
+            recs.extend(iss_param1['recommendations'])
+
+        elif iss_param2:
+            whys.append(iss_param2[0])
+            recs.extend(iss_param2['recommendations'])
+
+        else:
+            whys.append('Bad PCB support')
+            recs.append('Ensure good PCB support')
+
+        if tbmodified := self.find_issue('Poor print definition'):
+            # print(tbmodified)
+            ci_recs = unfreeze(tbmodified['recommendations'])
+            ci_whys = unfreeze(tbmodified['why'])
+
+            if not any(why in ci_whys for why in whys):
+                ci_whys.extend(whys)
+                ci_recs.extend(recs)
+
+                self.modify(tbmodified, recommendations=ci_recs, why=ci_whys)
+
+        else:
+            self.declare(Issue('Poor print definition', recommendations=recs, why=whys))
 
     @Rule(PickAndPlaceMachine(component_placement_accurate=False))
     def declare_narrow_gap_between_pads(self):
         self.declare(Issue('Narrow gap between pads',
                            recommendations=['Verify component placement pressure',
                                             'Use X-ray to verify BGA placement',
-                                            'Use microscope for QFPs']))
+                                            'Use microscope for QFPs'],
+                           why=['Inaccurate component placement']))
 
     @Rule(PickAndPlaceMachine(component_placement_pressure_good=False))
     def declare_excessive_component_pressure(self):
         self.declare(Issue('Excessive component placement pressure', recommendations=[
             'Verify actual component height data entered in the Pick-and-Place machine',
-            'Ensure that component placement height is ±1/3 of paste height']))
+            'Ensure that component placement height is ±1/3 of paste height'],
+                           why=['Bad component placement pressure']))
 
     @Rule(ReflowOven(reflow_profile_soak_extended=True))
     def declare_hot_paste_slump(self):
-        self.declare(Issue('Hot paste slump', recommendations=['Reduce soak']))
+        self.declare(
+            Issue('Hot paste slump', recommendations=['Reduce soak'], why=['Reflow profile soak extended']))
 
     @Rule(SolderPaste(expired=True))
     def declare_solder_paste_expired(self):
         self.declare(Issue('Solder paste expired',
-                           recommendations=['Replace solder paste', 'Do not mix old and new solder paste']))
+                           recommendations=['Replace solder paste', 'Do not mix old and new solder paste'],
+                           why=['Expired solder paste']))
 
-    @Rule(MAYBE(Issue('Solder paste expired', recommendations=MATCH.recc),
-                ScreenPrinter(operating_temperature_good=False, operating_humidity_good=False)))
-    def declare_dry_solder_paste(self, recc=None):
-        if recc:
-            list_reccs = unfreeze(recc)
-            list_reccs.extend(['Check temperature and humidity inside screen printer'])
-            self.declare(Issue('Dry solder paste', recommendations=list_reccs))
+    @Rule(OR(
+        AS.iss_param << Issue('Solder paste expired'),
+        AS.sp_param1 << ScreenPrinter(operating_temperature_good=False),
+        AS.sp_param2 << ScreenPrinter(operating_humidity_good=False)
+    ))
+    def declare_dry_solder_paste(self, iss_param=None, sp_param1=None, sp_param2=None):
+        recs = []
+        whys = []
+
+        if iss_param:
+            whys.append(iss_param[0])
+            recs.append('Replace solder paste')
+
+        elif sp_param1:
+            whys.append('Wrong operating temperature')
+            recs.append('Check temeperature inside screen printer')
+
         else:
-            self.declare(
-                Issue('Dry solder paste', recommendations=['Check temperature and humidity inside screen printer']))
+            whys.append('Wrong operating humidity')
+            recs.append('Check humidity inside screen printer')
 
-    def submit(self, event):
-        pass
+        if tbmodified := self.find_issue('Dry solder paste'):
+            ci_recs = unfreeze(tbmodified['recommendations'])
+            ci_whys = unfreeze(tbmodified['why'])
 
+            if not any(why in ci_whys for why in whys):
+                ci_whys.extend(whys)
+                ci_recs.extend(recs)
 
-# class ScrollableFrame(Frame):
-#     def __init__(self, container, *args, **kwargs):
-#         super().__init__(container, *args, **kwargs)
-#         canvas = Canvas(self)
-#         self.scrollable_frame = Frame(canvas)
-#         scrollbar = Scrollbar(self, orient=VERTICAL, command=canvas.yview)
-#         canvas.configure(yscrollcommand=scrollbar.set)
-#         scrollbar.pack(side=RIGHT, fill=Y)
-#         canvas.pack(side=LEFT, fill=BOTH, expand=True)
-#         canvas.create_window((0, 0), window=self.scrollable_frame, anchor=NW, tags='self.scrollable_frame')
-#
-#         self.scrollable_frame.bind(
-#             '<Configure>',
-#             lambda e: canvas.configure(
-#                 scrollregion=canvas.bbox('all')
-#             )
-#         )
+                self.modify(tbmodified, recommendations=ci_recs, why=ci_whys)
+
+        else:
+            self.declare(Issue('Dry solder paste', recommendations=recs, why=whys))
 
 
 class GUI(Frame):
@@ -420,14 +406,17 @@ class GUI(Frame):
 
         # ~~~~~~~~~~< Styling >~~~~~~~~~~
         self.texts_frames_bg_color = 'black'
-        self.header_font = ('Helvetica', '14')
-        self.element_font = ('Helvetica', '11')
+        self.header_font = ('Helvetica', 14)
+        self.element_font = ('Ga', 12)
+
+        self.header_label_style = Style()
+        self.header_label_style.configure('TextLabels.TLabel', font=self.header_font, background='#EEEEEF')
 
         self.label_style = Style()
-        self.label_style.configure('TextLabels.TLabel', font=self.header_font, background='#EEEEEF')
+        self.label_style.configure('TLabel', font=self.element_font, background='#EEEEEF')
 
-        # self.checkbutton_style = Style()
-        # self.checkbutton_style.configure('TCheckbutton', font=self.element_font)
+        self.checkbutton_style = Style()
+        self.checkbutton_style.configure('TCheckbutton', font=self.element_font, background='#EEEEEF')
 
         # self.combobox_style = Style()
         # self.checkbutton_style.configure('TCombobox', font=self.element_font)
@@ -442,7 +431,7 @@ class GUI(Frame):
 
         self.defect_query_label = Label(self.left_frame,
                                         text='What type of defect occurred?',
-                                        font=self.header_font,
+                                        style='TextLabels.TLabel',
                                         padding=[0, 0, 10, 0])
         self.defect_query_label.pack(side=TOP, anchor=NW)
 
@@ -497,9 +486,9 @@ class GUI(Frame):
         self.o_canvas.create_window((0, 0), window=self.o_frame, anchor=NW,
                                     tags='self.o_frame')
         self.o_frame.bind('<Configure>', self.on_frame_configure_o_canvas)
-        #
 
         self.defect_options.bind('<<ComboboxSelected>>', lambda e: self.create_check_btns(self.defect_options.get()))
+        self.create_check_btns(self.defect_options.get())
 
     def on_frame_configure_q_canvas(self, event):
         # Reset the scroll region to encompass the inner frame
@@ -512,22 +501,55 @@ class GUI(Frame):
     def run_engine(self, event=None):
         for comp, attrs in self.user_input.items():
             for attr, boolvar in attrs.items():
-                self.user_input[comp][attr] = boolvar.get()
+                if isinstance(boolvar, BooleanVar):
+                    self.user_input[comp][attr] = boolvar.get()
 
         pprint(self.user_input)
 
         self.engine.reset()
+        self.engine.declare(Defect(self.defect_options.get()))
+
+        # Declare component with attributes
         for comp, attrs in self.user_input.items():
             self.engine.declare(COMPONENT_BINDINGS[comp](**attrs))
 
         # watch('RULES', 'FACTS', 'ACTIVATIONS')
-
         self.engine.run()
-        print(self.engine.facts)
+
+        self.engine.create_graph()
+
+        self.engine.dot.render()
+        # print(self.engine.facts)
+
+        self.load_graph_image()
+        self.load_results()
+
+    def load_graph_image(self):
+        for widget in self.o_frame.winfo_children():
+            widget.destroy()
+
+        # img = ImageTk.PhotoImage(Image.open('graph-output/defect-analysis-tree.gv.png'))
+        img = ImageTk.PhotoImage(Image.open('graph-output/defect-analysis-tree.gv.png'))
+        print(img)
+        panel = Label(self.o_frame, image=img)
+
+        # Label(self.o_frame, text='hi').pack(side=BOTTOM)
+        panel.pack(side=BOTTOM)
+
+    def load_results(self):
+        results = ''
+        for i, fact in self.engine.facts.items():
+            if isinstance(fact, Issue):
+                results += f"Issue: {fact[0]}\nRecommendations:\n"
+                for num, rec in enumerate(fact['recommendations'], 1):
+                    results += f"{num}. {rec}\n"
+                results += '\n'
+
+        Label(self.o_frame, text=results).pack(side=BOTTOM, fill=BOTH, expand=TRUE)
 
     def create_check_btns(self, defect):
-        # for widget in self.questions_frame.winfo_children():
-        #     widget.destroy()
+        for widget in self.q_frame.winfo_children():
+            widget.destroy()
 
         component_queries = DEFECT_COMPONENTS[defect]
         for comp, attrs in component_queries.items():
@@ -544,6 +566,13 @@ class GUI(Frame):
 
 root = ThemedTk(theme='arc')
 gui = GUI(master=root)
+
+
+def create_graph(*args):
+    dot = Digraph()
+    for arg in args:
+        dot.node(arg)
+
 
 gui.mainloop()
 
