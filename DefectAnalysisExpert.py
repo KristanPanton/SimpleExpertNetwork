@@ -32,7 +32,7 @@ DEFECTS_LIST = ['Bridging',
 DEFECT_COMPONENTS = {
     'Bridging': {
         'PCB': {
-            'solder_mask_removed_between_adjacent_pads': 'Have the solder mask between adjacent pads been removed?'
+            'solder_mask_removed_between_adjacent_pads': 'Has the solder mask between adjacent pads been removed?'
         },
         'Stencil': {
             'clean': 'Is the stencil tension tight?',
@@ -161,10 +161,33 @@ COMPONENT_BINDINGS = {
 }
 
 
+class ScrollableFrame(Frame):
+    def __init__(self, container, *args, **kwargs):
+        super().__init__(container, *args, **kwargs)
+        self.canvas = Canvas(self)
+        scrollbar = Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = Frame(self.canvas)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all")
+            )
+        )
+
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+
 class DefectAnalysisEngine(KnowledgeEngine):
     def __init__(self):
         super().__init__()
-        self.dot = Digraph(comment='Defect Analysis Tree', node_attr={'color': 'lightblue2', 'style': 'filled', 'shape': 'box'})
+        self.dot = Digraph(comment='Defect Analysis Tree',
+                           node_attr={'color': 'lightblue2', 'style': 'filled', 'shape': 'box'})
         self.dot.format = 'png'
         self.dot.filename = 'graph-output/defect-analysis-tree.gv'
         self.defect = ''
@@ -194,6 +217,9 @@ class DefectAnalysisEngine(KnowledgeEngine):
                     self.dot.node(why)
                     self.dot.edge(why, issue[0])
                 # self.dot.edge(issue[0], self.defect)
+
+    def clear_graph(self):
+        self.dot.body.clear()
 
     @Rule(PCB(solder_mask_removed_between_adjacent_pads=False))
     def declare_coplanarity(self):
@@ -399,7 +425,6 @@ class GUI(Frame):
         self.engine = DefectAnalysisEngine()
 
         master.title("DefectAnalysisExpert")
-        master.geometry('800x500')
         # master.configure(bg='darkgrey')
 
         self.user_input = {}
@@ -408,6 +433,7 @@ class GUI(Frame):
         self.texts_frames_bg_color = 'black'
         self.header_font = ('Helvetica', 14)
         self.element_font = ('Ga', 12)
+        # self.element_font = (12)
 
         self.header_label_style = Style()
         self.header_label_style.configure('TextLabels.TLabel', font=self.header_font, background='#EEEEEF')
@@ -417,14 +443,6 @@ class GUI(Frame):
 
         self.checkbutton_style = Style()
         self.checkbutton_style.configure('TCheckbutton', font=self.element_font, background='#EEEEEF')
-
-        # self.combobox_style = Style()
-        # self.checkbutton_style.configure('TCombobox', font=self.element_font)
-
-        # self.btn_style = Style()
-        # self.btn_style.theme_use('clam')
-        # # self.btn_style.element_create()
-        # self.btn_style.configure('TButton', background='red', foreground='white', relief=FLAT)
 
         # ~~~~~~~~~~~< Left Frame >~~~~~~~~~~
         self.left_frame = Frame(master, borderwidth=0, padding=10)
@@ -447,62 +465,46 @@ class GUI(Frame):
         self.right_frame = Frame(master, borderwidth=0, padding=10)
         self.right_frame.pack(side=RIGHT, fill=BOTH, expand=True)
 
+        # ~~~~~~~~~~< Questions Frame >~~~~~~~~~~
         self.questions_label = Label(self.right_frame, text='Questions (Select all that apply)', padding=[0, 0, 0, 5],
                                      style='TextLabels.TLabel')
-        self.questions_label.pack(side=TOP, anchor=NW)
+        self.questions_label.grid(row=0, column=0, sticky='w')
 
-        # ~~~~~~~~~~< Questions Frame >~~~~~~~~~~
-        self.questions_frame = Frame(self.right_frame)
-        self.questions_frame.pack(side=TOP, anchor=N, fill=BOTH, expand=True, pady=[0, 10])
+        self.right_frame.columnconfigure(0, minsize=540, weight=2)
+        self.right_frame.columnconfigure(1, minsize=540, weight=2)
+        self.right_frame.rowconfigure(1, minsize=400, weight=2)
+        self.questions_frame = ScrollableFrame(self.right_frame)
+        self.questions_frame.canvas.configure(background='#F5F6F7', highlightthickness=0)
+        self.questions_frame.grid(row=1, column=0, sticky='nsew')
+        # self.questions_frame.canvas.configure(width=540, background='#F5F6F7')
 
-        self.q_canvas = Canvas(self.questions_frame)
-        self.q_frame = Frame(self.q_canvas)
-        self.q_vsb = Scrollbar(self.questions_frame, orient=VERTICAL, command=self.q_canvas.yview)
-        self.q_canvas.configure(yscrollcommand=self.q_vsb.set)
+        # self.header_label_style.configure('TextLabels.TLabel', font=self.header_font, background='#EEEEEF')
+        # self.questions_frame.canvas.config(bg='#F0F0F0')
+        # self.questions_frame.config(bg='#F0F0F0')
+        # self.questions_frame.scrollable_frame.config(bg='#F0F0F0')
 
-        self.q_vsb.pack(side=RIGHT, fill=Y)
-        self.q_canvas.pack(side=LEFT, fill=BOTH, expand=True)
-        self.q_canvas.create_window((0, 0), window=self.q_frame, anchor=NW,
-                                    tags='self.q_frame')
-        self.q_frame.bind('<Configure>', self.on_frame_configure_q_canvas)
-
-        # ~~~~~~~~~~< Output Frame >~~~~~~~~~~
-        self.submit_btn = Button(self.right_frame, text='Submit', command=self.run_engine)
-        self.submit_btn.pack(side=BOTTOM, anchor='ne', expand=True)
-        #
+        # ~~~~~~~~~~< Results Frame >~~~~~~~~~~
         self.results_label = Label(self.right_frame, text='Results', padding=[5, 0], style='TextLabels.TLabel')
-        self.results_label.pack(side=TOP, anchor=NW)
-        #
-        self.results_frame = Frame(self.right_frame)
-        self.results_frame.pack(side=BOTTOM, fill=BOTH, expand=True, pady=[0, 10])
+        self.results_label.grid(row=0, column=1, sticky='w')
 
-        self.o_canvas = Canvas(self.results_frame, borderwidth=0)
-        self.o_frame = Frame(self.o_canvas)
-        self.o_vsb = Scrollbar(self.results_frame, orient='vertical', command=self.o_canvas.yview)
-        self.o_canvas.configure(yscrollcommand=self.o_vsb.set)
+        self.results_frame = ScrollableFrame(self.right_frame)
+        self.results_frame.canvas.configure(background='#F5F6F7', highlightthickness=0)
+        self.results_frame.grid(row=1, column=1, sticky='nsew')
 
-        self.o_vsb.pack(side=RIGHT, fill='y')
-        self.o_canvas.pack(side=LEFT, fill=BOTH, expand=True)
-        self.o_canvas.create_window((0, 0), window=self.o_frame, anchor=NW,
-                                    tags='self.o_frame')
-        self.o_frame.bind('<Configure>', self.on_frame_configure_o_canvas)
+        self.submit_btn = Button(self.right_frame, text='Submit', command=self.run_engine)
+        self.submit_btn.grid(row=2, column=1, sticky='e')
 
-        self.defect_options.bind('<<ComboboxSelected>>', lambda e: self.create_check_btns(self.defect_options.get()))
+        self.defect_options.bind('<<ComboboxSelected>>', self.load_components)
+
         self.create_check_btns(self.defect_options.get())
 
-    def on_frame_configure_q_canvas(self, event):
-        # Reset the scroll region to encompass the inner frame
-        self.q_canvas.configure(scrollregion=self.q_canvas.bbox('all'))
-
-    def on_frame_configure_o_canvas(self, event):
-        # Reset the scroll region to encompass the inner frame
-        self.o_canvas.configure(scrollregion=self.o_canvas.bbox('all'))
-
     def run_engine(self, event=None):
+        self.engine.clear_graph()
+
         for comp, attrs in self.user_input.items():
-            for attr, boolvar in attrs.items():
-                if isinstance(boolvar, BooleanVar):
-                    self.user_input[comp][attr] = boolvar.get()
+            for attr, bool_var in attrs.items():
+                if isinstance(bool_var, BooleanVar):
+                    self.user_input[comp][attr] = bool_var.get()
 
         pprint(self.user_input)
 
@@ -521,51 +523,68 @@ class GUI(Frame):
         self.engine.dot.render()
         # print(self.engine.facts)
 
-        self.load_graph_image()
         self.load_results()
+        # self.load_graph_image()
 
     def load_graph_image(self):
-        for widget in self.o_frame.winfo_children():
-            widget.destroy()
-
-        # img = ImageTk.PhotoImage(Image.open('graph-output/defect-analysis-tree.gv.png'))
+        # img = PhotoImage(file='graph-output\defect-analysis-tree.gv.png')
         img = ImageTk.PhotoImage(Image.open('graph-output/defect-analysis-tree.gv.png'))
-        print(img)
-        panel = Label(self.o_frame, image=img)
+        # img = ImageTk.PhotoImage(Image.open('graph-output/test.png'))
+        # print(img)
+        panel = Label(self.right_frame, image=img)
 
-        # Label(self.o_frame, text='hi').pack(side=BOTTOM)
-        panel.pack(side=BOTTOM)
+        # Label(self.right_frame, text='hi').grid(row=2, column=0, columnspan=2)
+        panel.grid(row=2, column=0, columnspan=2, sticky='nsew')
 
     def load_results(self):
         results = ''
-        for i, fact in self.engine.facts.items():
-            if isinstance(fact, Issue):
-                results += f"Issue: {fact[0]}\nRecommendations:\n"
-                for num, rec in enumerate(fact['recommendations'], 1):
+        for i, _fact in self.engine.facts.items():
+            if isinstance(_fact, Issue):
+                results += f"Issue: {_fact[0]}\nRecommendations:\n"
+                for num, rec in enumerate(_fact['recommendations'], 1):
                     results += f"{num}. {rec}\n"
                 results += '\n'
 
-        Label(self.o_frame, text=results).pack(side=BOTTOM, fill=BOTH, expand=TRUE)
+        results_output = Label(self.results_frame.scrollable_frame, text=results, background='#F5F6F7')
+        results_output.pack(side=BOTTOM, fill=BOTH, expand=TRUE)
 
-    def create_check_btns(self, defect):
-        for widget in self.q_frame.winfo_children():
+    def load_components(self, event):
+        for widget in self.questions_frame.scrollable_frame.winfo_children():
             widget.destroy()
 
+        for widget in self.results_frame.scrollable_frame.winfo_children():
+            widget.destroy()
+
+        self.engine.clear_graph()
+        self.create_check_btns(self.defect_options.get())
+
+    def create_check_btns(self, defect):
         component_queries = DEFECT_COMPONENTS[defect]
+
+        max_width = 0
         for comp, attrs in component_queries.items():
             # print(comp, attrs)
             self.user_input[comp] = {}
-            Label(self.q_frame, text=comp).pack(side=TOP, anchor=NW)
+            Label(self.questions_frame.scrollable_frame, text=comp).pack(side=TOP, anchor=NW)
             for attr, query in attrs.items():
                 self.user_input[comp][attr] = BooleanVar()
-                cb = Checkbutton(self.q_frame, text=query,
+                cb = Checkbutton(self.questions_frame.scrollable_frame, text=query,
                                  onvalue=True, offvalue=False,
                                  variable=self.user_input[comp][attr])
+                # current_width = cb.winfo_reqwidth()
+                # max_width = current_width if current_width > max_width else max_width
+                # print(max_width)
                 cb.pack(side=TOP, anchor=NW)
+        # self.questions_label.grid(row=0, column=0, sticky='w')
+        # self.questions_frame.canvas['width'] = max_width
 
 
 root = ThemedTk(theme='arc')
 gui = GUI(master=root)
+
+root.update()
+# now root.geometry() returns valid size/placement
+root.minsize(root.winfo_width(), root.winfo_height())
 
 
 def create_graph(*args):
