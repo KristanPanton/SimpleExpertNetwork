@@ -1,0 +1,41 @@
+// Defect Analysis Tree
+digraph {
+	node [color=lightblue2 shape=box style=filled]
+	"Excessive component placement pressure"
+	"Bad component placement pressure"
+	"Bad component placement pressure" -> "Excessive component placement pressure"
+	Peaking
+	"Incorrect separation speed"
+	"Incorrect separation speed" -> Peaking
+	"Uneven print pressure"
+	"Squeegee blade damaged"
+	"Squeegee blade damaged" -> "Uneven print pressure"
+	"Poor print definition"
+	Peaking
+	Peaking -> "Poor print definition"
+	"Uneven print pressure"
+	"Uneven print pressure" -> "Poor print definition"
+	"Zero print gap absent"
+	"Faulty stencil aperture design"
+	"Aperture not slightly smaller than landing pad"
+	"Aperture not slightly smaller than landing pad" -> "Faulty stencil aperture design"
+	"Dry solder paste"
+	"Wrong operating humidity"
+	"Wrong operating humidity" -> "Dry solder paste"
+	"Minimum print pressure insufficient"
+	"Minimum print pressure insufficient" -> "Dry solder paste"
+	Coplanarity
+	"Solder mask between adjacent pads not removed"
+	"Solder mask between adjacent pads not removed" -> Coplanarity
+	"Poor stencil to PCB gasketing"
+	"Faulty stencil aperture design"
+	"Faulty stencil aperture design" -> "Poor stencil to PCB gasketing"
+	Coplanarity
+	Coplanarity -> "Poor stencil to PCB gasketing"
+	"Smearing during printing process"
+	"Stencil is was not dry after cleaning or before next print"
+	"Stencil is was not dry after cleaning or before next print" -> "Smearing during printing process"
+	"Screen printer misalignment"
+	"Print is not accurate or consistent"
+	"Print is not accurate or consistent" -> "Screen printer misalignment"
+}

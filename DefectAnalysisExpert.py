@@ -11,11 +11,8 @@ from ttkthemes import ThemedTk
 # ------------------------------------------------------------------------------ #
 # Facts from https://www.alphaassembly.com/Products/Alpha-Troubleshooting-Guides #
 # ------------------------------------------------------------------------------ #
-
-# TODO:
-# Add more defects
-# Add related components to each Issue()
-# Create GUI
+# TODO
+#   - Remove duplicated code
 
 pprint = PrettyPrinter(indent=4).pprint
 
@@ -32,35 +29,35 @@ DEFECTS_LIST = ['Bridging',
 DEFECT_COMPONENTS = {
     'Bridging': {
         'PCB': {
-            'solder_mask_removed_between_adjacent_pads': 'Has the solder mask between adjacent pads been removed?'
+            'solder_mask_removed_between_adjacent_pads': 'Solder mask between adjacent pads removed'
         },
         'Stencil': {
-            'clean': 'Is the stencil tension tight?',
-            'aperture_smaller_than_landing_pad': 'Is the stencil aperture smaller than the landing pad?',
-            'minimum_print_pressure_good': 'Is the minimum print pressure sufficient?',
-            'dry_after_clean': 'Was the stencil dry after cleaning?',
-            'dry_before_next_print': 'Was the stencil dry before the next print?',
-            'wiped_frequently': 'Is the stencil wiped frequently?',
+            'clean': 'Tight stencil tension',
+            'aperture_smaller_than_landing_pad': 'Stencil aperture smaller than landing pad',
+            'minimum_print_pressure_good': 'Sufficient minimum print pressure',
+            'dry_after_clean': 'Stencil dry after cleaning',
+            'dry_before_next_print': 'Stencil dry before next print',
+            'wiped_frequently': 'Stencil wiped frequently',
         },
         'Screen Printer': {
-            'zero_print_gap_present': 'Is there a zero print gap?',
-            'print_accurate': 'Are the prints accurate?',
-            'print_consistent': 'Are the prints consistent?',
-            'pcb_support_good': 'Are the PCBs sufficiently supported?',
-            'separation_speed_good': "Are there any 'dog ears' on the board?",
-            'squeegee_blade_condition_good': 'Are the squeegee blades damaged?',
-            'operating_temperature_good': 'Are the operating temperatures verified?',
-            'operating_humidity_good': 'Is the operating humidity verified?'
+            'zero_print_gap_present': 'Zero print gap present',
+            'print_accurate': 'Prints are accurate',
+            'print_consistent': 'Prints are consistent',
+            'pcb_support_good': 'Sufficient PCB support',
+            'separation_speed_good': "'Dog ears' present",
+            'squeegee_blade_condition_good': 'Squeegee blades undamaged',
+            'operating_temperature_good': 'Correct operating temperature',
+            'operating_humidity_good': 'Correct operating humidity'
         },
         'Solder Paste': {
-            'expired': 'Has the solder paste expired?',
-            'passed_hot_slump_test': 'Has the solder paste passed the cold and hot slump test?',
+            'expired': 'Expired solder paste',
+            'passed_hot_slump_test': 'Hot and cold slump test passed',
         },
         'Reflow Oven': {
-            'reflow_profile_soak_extended': 'Is there an extended soak in the reflow profile?'
+            'reflow_profile_soak_extended': 'Extended soak in the reflow profile'
         },
         'Pick-and-Place Machine': {
-            'component_placement_pressure_good': 'Is there any solder paste squeezed out of the pads?'
+            'component_placement_pressure_good': 'Solder paste squeezed out of pads'
         }
     }
 }
@@ -161,9 +158,9 @@ COMPONENT_BINDINGS = {
 }
 
 
-class ScrollableFrame(Frame):
-    def __init__(self, container, *args, **kwargs):
-        super().__init__(container, *args, **kwargs)
+class VertScrollFrame(Frame):
+    def __init__(self, container, **kwargs):
+        super().__init__(container, **kwargs)
         self.canvas = Canvas(self)
         scrollbar = Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.scrollable_frame = Frame(self.canvas)
@@ -181,6 +178,28 @@ class ScrollableFrame(Frame):
 
         self.canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+
+
+class HorScrollFrame(Frame):
+    def __init__(self, container, **kwargs):
+        super().__init__(container, **kwargs)
+        self.canvas = Canvas(self)
+        self.scrollbar = Scrollbar(self, orient="horizontal", command=self.canvas.xview)
+        self.scrollable_frame = Frame(self.canvas)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all")
+            )
+        )
+
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        self.canvas.configure(xscrollcommand=self.scrollbar.set)
+
+        self.canvas.pack(side="top", fill="both", expand=True)
+        self.scrollbar.pack(side="bottom", fill="x")
 
 
 class DefectAnalysisEngine(KnowledgeEngine):
@@ -283,7 +302,7 @@ class DefectAnalysisEngine(KnowledgeEngine):
             whys.append('Unclean stencil')
             recs.append('Clean stencil')
 
-        else:
+        elif sten_param3:
             whys.append('Wipe frequency too low')
             recs.append('Increase wipe frequency')
 
@@ -472,8 +491,10 @@ class GUI(Frame):
 
         self.right_frame.columnconfigure(0, minsize=540, weight=2)
         self.right_frame.columnconfigure(1, minsize=540, weight=2)
-        self.right_frame.rowconfigure(1, minsize=400, weight=2)
-        self.questions_frame = ScrollableFrame(self.right_frame)
+        self.right_frame.rowconfigure(1, minsize=450, weight=2)
+        self.right_frame.rowconfigure(2, weight=1)
+
+        self.questions_frame = VertScrollFrame(self.right_frame)
         self.questions_frame.canvas.configure(background='#F5F6F7', highlightthickness=0)
         self.questions_frame.grid(row=1, column=0, sticky='nsew')
         # self.questions_frame.canvas.configure(width=540, background='#F5F6F7')
@@ -487,12 +508,15 @@ class GUI(Frame):
         self.results_label = Label(self.right_frame, text='Results', padding=[5, 0], style='TextLabels.TLabel')
         self.results_label.grid(row=0, column=1, sticky='w')
 
-        self.results_frame = ScrollableFrame(self.right_frame)
+        self.results_frame = VertScrollFrame(self.right_frame)
         self.results_frame.canvas.configure(background='#F5F6F7', highlightthickness=0)
         self.results_frame.grid(row=1, column=1, sticky='nsew')
 
+        self.image_frame = HorScrollFrame(self.right_frame)
+        self.image_frame.grid(row=2, column=0, columnspan=2, sticky='nsew')
+
         self.submit_btn = Button(self.right_frame, text='Submit', command=self.run_engine)
-        self.submit_btn.grid(row=2, column=1, sticky='e')
+        self.submit_btn.grid(row=3, column=1, sticky='e')
 
         self.defect_options.bind('<<ComboboxSelected>>', self.load_components)
 
@@ -524,17 +548,23 @@ class GUI(Frame):
         # print(self.engine.facts)
 
         self.load_results()
-        # self.load_graph_image()
+        self.load_graph_image()
 
     def load_graph_image(self):
+        for widget in self.image_frame.scrollable_frame.winfo_children():
+            widget.destroy()
         # img = PhotoImage(file='graph-output\defect-analysis-tree.gv.png')
-        img = ImageTk.PhotoImage(Image.open('graph-output/defect-analysis-tree.gv.png'))
+        self.img = ImageTk.PhotoImage(Image.open('graph-output/defect-analysis-tree.gv.png'))
         # img = ImageTk.PhotoImage(Image.open('graph-output/test.png'))
-        # print(img)
-        panel = Label(self.right_frame, image=img)
+        # print(self.img_widget)
+        self.img_widget = Label(self.image_frame.scrollable_frame, image=self.img)
+
+        # Label(self.image_frame.scrollable_frame, text='Hello').pack()
+        # self.img_widget.pack(side=LEFT, expand=True, fill='both')
+        self.img_widget.grid(sticky='nsew')
 
         # Label(self.right_frame, text='hi').grid(row=2, column=0, columnspan=2)
-        panel.grid(row=2, column=0, columnspan=2, sticky='nsew')
+        # self.image_frame.grid(row=2, column=0, columnspan=2, sticky='nsew')
 
     def load_results(self):
         results = ''
